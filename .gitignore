@@ -462,7 +462,3 @@ Temporary Items
 ### macOS Patch ###
 # iCloud generated files
 *.icloud
-
-### Project ###
-# Local scratch / working directory (not part of the project)
-.scratch/
