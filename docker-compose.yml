@@ -1,0 +1,27 @@
+# Run the generated CoreDNS config in a container instead of natively.
+#
+# Docker publishes on the host's port 53, so the Corefile must also use port 53.
+# Before `up`, set `port: 53` in records.yaml (and leave `address` unset), then
+# regenerate so the mounted files match:
+#
+#   sed -i '' 's/^port:.*/port: 53/' records.yaml   # or edit by hand
+#   devdns generate
+#   docker compose up -d
+#   dig @127.0.0.1 app.example.internal
+#   dig @127.0.0.1 github.com          # forwarded upstream
+#
+# The container reads the generated Corefile and zone files read-only; keep
+# editing records.yaml + `devdns generate` on the host to change records.
+services:
+  coredns:
+    image: coredns/coredns:1.11.3
+    container_name: devdns-coredns
+    restart: unless-stopped
+    command: ["-conf", "/config/Corefile"]
+    working_dir: /config
+    volumes:
+      - ./Corefile:/config/Corefile:ro
+      - ./zones:/config/zones:ro
+    ports:
+      - "127.0.0.1:53:53/udp"
+      - "127.0.0.1:53:53/tcp"

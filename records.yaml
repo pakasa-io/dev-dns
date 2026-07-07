@@ -1,0 +1,37 @@
+# devdns records file -- the single source of truth for the local dev zone.
+#
+# `zone` is served authoritatively from the `records` below; every other query
+# is forwarded to the upstream resolvers. Edit this file by hand, or with the
+# CLI (`devdns add|update|remove`). Note: CLI edits rewrite this file and do
+# not preserve comments.
+zone: example.internal
+
+# Default TTL (seconds) for records that do not set their own.
+ttl: 60
+
+# Listen port. 1053 needs no elevated privileges, which is convenient for a
+# quick start; use 53 for a system-wide resolver (requires sudo). See the README.
+port: 1053
+
+# Optional: bind to a single address (e.g. 127.0.0.1) to avoid exposing the
+# resolver on your LAN. Omit to listen on all interfaces (required for Docker).
+# address: 127.0.0.1
+
+# Upstream resolvers for everything outside the local zone (Cloudflare + Google).
+upstreams:
+  - 1.1.1.1
+  - 1.0.0.1
+  - 8.8.8.8
+  - 8.8.4.4
+
+# Local records. `name` is relative to the zone; `@` is the zone apex.
+records:
+  - name: app
+    type: A
+    value: 127.0.0.1
+  - name: api
+    type: A
+    value: 127.0.0.1
+  - name: auth
+    type: A
+    value: 127.0.0.1

@@ -462,3 +462,9 @@ Temporary Items
 ### macOS Patch ###
 # iCloud generated files
 *.icloud
+
+### devdns (project) ###
+# The built devdns CLI and the downloaded CoreDNS binary
+/bin/
+# CoreDNS runtime state: pidfile and logs
+/.devdns/
