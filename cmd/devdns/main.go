@@ -62,6 +62,8 @@ func run(args []string) error {
 		return cmdReload(rest)
 	case "status":
 		return cmdStatus(rest)
+	case "install-coredns", "install":
+		return cmdInstall(rest)
 	case "version", "-v", "--version":
 		fmt.Println("devdns " + version)
 		return nil
@@ -186,6 +188,13 @@ func parseMixed(fs *flag.FlagSet, args []string) ([]string, error) {
 		args = fs.Args()[1:]
 	}
 }
+
+// downloadAllowed reports whether start/restart may auto-download CoreDNS.
+func downloadAllowed(noDownload bool) bool {
+	return !noDownload && os.Getenv("DEVDNS_NO_DOWNLOAD") == ""
+}
+
+func logStderr(s string) { fmt.Fprintln(os.Stderr, s) }
 
 // ---- record commands ----
 
@@ -375,9 +384,10 @@ func cmdGenerate(args []string) error {
 }
 
 func cmdStart(args []string) error {
-	fs := newFlagSet("start", "usage: devdns start [--file F] [--coredns PATH]")
+	fs := newFlagSet("start", "usage: devdns start [--file F] [--coredns PATH] [--no-download]")
 	file := fileFlag(fs)
 	binary := fs.String("coredns", "", "path to the coredns binary")
+	noDownload := fs.Bool("no-download", false, "do not auto-download CoreDNS if it is missing")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -388,7 +398,7 @@ func cmdStart(args []string) error {
 	if err := a.regenerate(cfg); err != nil {
 		return err
 	}
-	bin, err := coredns.FindBinary(*binary, a.root)
+	bin, err := coredns.EnsureBinary(*binary, a.root, downloadAllowed(*noDownload), logStderr)
 	if err != nil {
 		return err
 	}
@@ -426,9 +436,10 @@ func cmdStop(args []string) error {
 }
 
 func cmdRestart(args []string) error {
-	fs := newFlagSet("restart", "usage: devdns restart [--file F] [--coredns PATH]")
+	fs := newFlagSet("restart", "usage: devdns restart [--file F] [--coredns PATH] [--no-download]")
 	file := fileFlag(fs)
 	binary := fs.String("coredns", "", "path to the coredns binary")
+	noDownload := fs.Bool("no-download", false, "do not auto-download CoreDNS if it is missing")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -439,7 +450,7 @@ func cmdRestart(args []string) error {
 	if err := a.regenerate(cfg); err != nil {
 		return err
 	}
-	bin, err := coredns.FindBinary(*binary, a.root)
+	bin, err := coredns.EnsureBinary(*binary, a.root, downloadAllowed(*noDownload), logStderr)
 	if err != nil {
 		return err
 	}
@@ -495,6 +506,29 @@ func cmdStatus(args []string) error {
 		fmt.Printf("Records:  %d\n", len(cfg.Records))
 	}
 	fmt.Printf("Corefile: %s\n", a.corefile)
+	return nil
+}
+
+func cmdInstall(args []string) error {
+	fs := newFlagSet("install-coredns", "usage: devdns install-coredns [--file F] [--coredns-version V]")
+	file := fileFlag(fs)
+	ver := fs.String("coredns-version", "", "CoreDNS version to download (default "+coredns.DefaultVersion+")")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	a, err := newApp(*file)
+	if err != nil {
+		return err
+	}
+	binPath, err := coredns.Install(coredns.InstallOptions{
+		Version: *ver,
+		Dest:    coredns.DefaultDest(a.root),
+		Log:     logStderr,
+	})
+	if err != nil {
+		return err
+	}
+	fmt.Println(binPath)
 	return nil
 }
 
@@ -599,6 +633,7 @@ Server commands:
   restart                 Restart CoreDNS
   reload                  Regenerate config (a running CoreDNS reloads itself)
   status                  Show CoreDNS status and configuration
+  install-coredns         Download CoreDNS into ./bin (auto-runs at start)
 
 Other:
   version                 Print the devdns version

@@ -3,7 +3,7 @@
 $ORIGIN example.internal.
 $TTL 60
 @	IN	SOA	ns.example.internal. admin.example.internal. (
-			1783467544	; serial
+			1783468610	; serial
 			7200	; refresh
 			3600	; retry
 			1209600	; expire

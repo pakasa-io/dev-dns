@@ -28,8 +28,8 @@ fmt: ## Format the code
 tidy: ## Tidy go.mod / go.sum
 	$(GO) mod tidy
 
-coredns: ## Download the CoreDNS binary into ./bin
-	./scripts/install-coredns.sh $(BIN_DIR)
+coredns: build ## Download the CoreDNS binary into ./bin (OS-agnostic, via devdns)
+	$(BIN_DIR)/$(BINARY) install-coredns
 
 generate: build ## Regenerate the Corefile and zone files from records.yaml
 	$(BIN_DIR)/$(BINARY) generate

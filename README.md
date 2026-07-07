@@ -34,11 +34,16 @@ resolvers. DNS is served by [CoreDNS](https://coredns.io/); a Go CLI named
 ## Requirements
 
 - **Go** ≥ 1.23 (to build the `devdns` CLI).
-- **CoreDNS** (only needed to actually serve DNS). Install it with `make coredns`
-  (downloads a release binary into `./bin`) or `brew install coredns`.
+- **CoreDNS** — only needed to actually serve DNS, and **fetched automatically**:
+  `devdns start` downloads the right binary for your OS/architecture into `./bin`
+  if it is missing. You can also pre-fetch it (`devdns install-coredns` or
+  `make coredns`), `brew install coredns`, or point `DEVDNS_COREDNS` at an
+  existing binary.
 - `dig` / `nslookup` for verification (preinstalled on macOS and most Linux).
 
 Generating and validating config needs only Go — CoreDNS is not required for that.
+The downloader is pure Go (no `curl`/`tar` needed) and works on macOS, Linux, and
+Windows.
 
 ## Install
 
@@ -46,17 +51,21 @@ Generating and validating config needs only Go — CoreDNS is not required for t
 # 1. Build the CLI (produces ./bin/devdns)
 make build
 
-# 2. Get CoreDNS (choose one)
-make coredns          # downloads ./bin/coredns
+# 2. CoreDNS is fetched automatically on the first `devdns start`.
+#    To pre-fetch it (e.g. in CI or offline prep), choose any of:
+make coredns                  # OS-agnostic Go downloader -> ./bin/coredns
+./bin/devdns install-coredns  # same thing, directly
 # or: brew install coredns
-# or: set DEVDNS_COREDNS=/path/to/coredns
+# or: export DEVDNS_COREDNS=/path/to/coredns
 
 # Optional: install devdns onto your PATH
-make install          # go install ./cmd/devdns
+make install                  # go install ./cmd/devdns
 ```
 
 `devdns` looks for the CoreDNS binary in this order: `--coredns` flag →
-`$DEVDNS_COREDNS` → `./bin/coredns` → `$PATH`.
+`$DEVDNS_COREDNS` → `./bin/coredns` → `$PATH`. If none is found, `start` and
+`restart` download it into `./bin`. Disable that with `--no-download` or
+`DEVDNS_NO_DOWNLOAD=1`, and pick a version with `DEVDNS_COREDNS_VERSION`.
 
 ## Quick start
 
@@ -64,10 +73,9 @@ The shipped `records.yaml` uses port **1053**, which needs no `sudo`.
 
 ```bash
 make build
-make coredns
 
 ./bin/devdns generate      # write Corefile + zones/ from records.yaml
-./bin/devdns start         # start CoreDNS in the background
+./bin/devdns start         # downloads CoreDNS if missing, then starts it
 ./bin/devdns status
 
 # Local zone resolves:
@@ -172,11 +180,12 @@ Every command accepts `--file <path>` (default `records.yaml`).
 | `remove <name> [--type T]` | Remove records for a name |
 | `validate` | Validate `records.yaml` |
 | `generate` | Regenerate the Corefile + zone file |
-| `start [--coredns PATH]` | Start CoreDNS in the background |
+| `start [--coredns PATH] [--no-download]` | Start CoreDNS (downloads it if missing) |
 | `stop` | Stop CoreDNS |
-| `restart [--coredns PATH]` | Restart CoreDNS |
+| `restart [--coredns PATH] [--no-download]` | Restart CoreDNS (downloads it if missing) |
 | `reload` | Regenerate config; a running CoreDNS reloads itself |
 | `status` | Show CoreDNS status and configuration |
+| `install-coredns [--coredns-version V]` | Download CoreDNS into `./bin` (auto-runs at start) |
 | `version` | Print the version |
 
 **Type inference:** `add`/`update` infer the type from the value — a valid IPv4
@@ -300,8 +309,11 @@ A local answer shows your configured IP with `AUTHORITY`/`flags: aa`
 
 ## Troubleshooting
 
-**`coredns binary not found`** — run `make coredns`, `brew install coredns`, or
-set `DEVDNS_COREDNS=/path/to/coredns`.
+**`coredns binary not found`** — normally `start` downloads CoreDNS
+automatically; you only see this with `--no-download` / `DEVDNS_NO_DOWNLOAD`, or a
+broken `--coredns` / `DEVDNS_COREDNS` path. Fix the path, run
+`devdns install-coredns` (or `make coredns` / `brew install coredns`), or allow
+the download. **Air-gapped:** install CoreDNS manually and set `DEVDNS_COREDNS`.
 
 **`permission denied` / port 53** — you tried to bind port 53 without privileges.
 Use port 1053 (the default) or run with `sudo` / Docker. See
@@ -331,9 +343,9 @@ sudo killall -HUP mDNSResponder`.
 │   ├── records/         # load/validate/mutate/persist records.yaml
 │   ├── validation/      # hostname / IP / record-type checks
 │   ├── generator/       # render Corefile + zone files (pure funcs)
-│   └── coredns/         # start/stop/status process management
+│   └── coredns/         # start/stop/status + OS-agnostic downloader
 ├── zones/               # generated zone files
-├── scripts/             # install-coredns.sh
+├── scripts/             # install-coredns.sh (bash fallback; devdns fetches it natively)
 ├── records.yaml         # your records (source of truth)
 ├── Corefile             # generated CoreDNS config
 ├── docker-compose.yml   # optional containerized CoreDNS
