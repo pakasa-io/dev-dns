@@ -55,7 +55,15 @@ Windows.
 brew install pakasa-io/tap/devdns
 ```
 
-This also installs `coredns` as a dependency. Upgrade with `brew upgrade devdns`.
+This also installs `coredns` as a dependency. To upgrade, refresh the tap first:
+
+```bash
+brew update && brew upgrade devdns
+```
+
+(`brew upgrade devdns` alone can report "already installed" if you have
+`HOMEBREW_NO_AUTO_UPDATE=1` set — that skips the tap refresh, so Homebrew never
+sees the new release. `brew update` pulls the latest formula.)
 
 ### From source
 

@@ -54,8 +54,28 @@ func FindBinary(explicit string, searchDirs ...string) (string, error) {
 	if p, err := exec.LookPath("coredns"); err == nil {
 		return p, nil
 	}
+	// Fall back to well-known install locations. This matters because port 53
+	// (the default) requires `sudo`, and sudo -- like cron -- often resets PATH
+	// to a minimal set that omits Homebrew/MacPorts, so LookPath alone would
+	// miss a `brew install coredns` that a non-privileged shell finds fine.
+	for _, d := range wellKnownBinDirs {
+		p := filepath.Join(d, "coredns")
+		if fi, err := os.Stat(p); err == nil && !fi.IsDir() {
+			return p, nil
+		}
+	}
 	return "", fmt.Errorf("coredns binary not found; install it with `make coredns` (or `brew install coredns`), " +
 		"or point DEVDNS_COREDNS at an existing binary")
+}
+
+// wellKnownBinDirs are common absolute locations for a package-manager coredns,
+// searched as a last resort so devdns finds it even when PATH is minimal (under
+// sudo or cron). $PATH and the store dirs still take precedence above.
+var wellKnownBinDirs = []string{
+	"/opt/homebrew/bin", // Homebrew (Apple Silicon)
+	"/usr/local/bin",    // Homebrew (Intel macOS), common Linux
+	"/opt/local/bin",    // MacPorts
+	"/usr/bin",          // Linux distro packages
 }
 
 // Status reports whether the tracked CoreDNS process is alive.
