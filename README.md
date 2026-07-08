@@ -85,30 +85,30 @@ with `DEVDNS_COREDNS_VERSION`.
 ## Quick start
 
 This repository ships a ready-to-run project store in `./.devdns/` (zone
-`example.internal`, port **1053**, which needs no `sudo`), so from the repo root:
+`example.internal`, port **53**), so from the repo root:
 
 ```bash
 make build
 
-./bin/devdns start         # walks up to ./.devdns, downloads CoreDNS if missing, starts it
-./bin/devdns status
+sudo ./bin/devdns start    # port 53 needs root; walks up to ./.devdns, downloads CoreDNS if missing
+sudo ./bin/devdns status
 
 # Local zone resolves:
-dig @127.0.0.1 -p 1053 app.example.internal +short      # -> 127.0.0.1
+dig @127.0.0.1 app.example.internal +short      # -> 127.0.0.1
 # Public DNS is forwarded:
-dig @127.0.0.1 -p 1053 example.com +short
+dig @127.0.0.1 example.com +short
 
-./bin/devdns stop
+sudo ./bin/devdns stop
 ```
 
 For a **new** project of your own, scaffold a store first:
 
 ```bash
 cd ~/my-project
-devdns init --zone my-project.internal   # creates ./.devdns with a starter records.yaml
+devdns init --zone my-project.internal   # creates ./.devdns with a starter records.yaml (port 53)
 devdns add app 127.0.0.1
-devdns start
-dig @127.0.0.1 -p 1053 app.my-project.internal +short
+sudo devdns start                        # port 53 needs root; or `devdns init --port 1053` for no sudo
+dig @127.0.0.1 app.my-project.internal +short
 ```
 
 To make your whole machine use it, see
@@ -155,13 +155,13 @@ store, which CoreDNS serves:
 The generated Corefile has two server blocks:
 
 ```
-example.internal:1053 {      # authoritative for your zone
+example.internal:53 {        # authoritative for your zone
     file zones/example.internal.db { reload 5s }
     log
     errors
 }
 
-.:1053 {                     # everything else
+.:53 {                       # everything else
     forward . 1.1.1.1 1.0.0.1 8.8.8.8 8.8.4.4
     cache 30
     reload 5s
@@ -181,7 +181,7 @@ restart. Each generate bumps the zone's SOA serial so the change is detected.
 ```yaml
 zone: example.internal      # required: the authoritative local zone
 ttl: 60                     # optional: default record TTL (default 60)
-port: 1053                  # optional: listen port (default 53)
+port: 53                    # optional: listen port; 53 needs sudo, >=1024 (e.g. 1053) doesn't
 # address: 127.0.0.1        # optional: bind one address; omit = all interfaces
 upstreams:                  # optional: forwarders (default: Cloudflare + Google)
   - 1.1.1.1
@@ -270,11 +270,16 @@ files; if CoreDNS is running it applies the change within a few seconds.
 
 ## Point your OS at devdns
 
-### macOS (recommended: per-domain, no sudo for CoreDNS)
+Two ways, depending on your port. **Whole-system** works out of the box with the
+default port 53 (devdns runs under `sudo`). **Per-domain** routes only your zone
+and needs no `sudo`, but requires a high port (e.g. 1053).
 
-macOS reads `/etc/resolver/<domain>` files to route a single domain to a specific
-resolver — including a custom port. This keeps your normal DNS untouched and
-only sends the local zone to devdns, so CoreDNS can stay on port 1053:
+### Per-domain, no sudo (port 1053)
+
+Route only your local zone to devdns on a high port, leaving system DNS
+untouched. First set the store to port 1053 (`devdns init --port 1053`, or
+`port: 1053` then `devdns generate`). macOS reads `/etc/resolver/<domain>` files,
+which support a custom port:
 
 ```bash
 sudo mkdir -p /etc/resolver
@@ -290,12 +295,12 @@ ping app.example.internal
 
 Remove it with `sudo rm /etc/resolver/example.internal`.
 
-### macOS / any OS (whole-system resolver)
+### Whole-system resolver (default, port 53)
 
-Point all DNS at CoreDNS and let it forward public queries. This needs CoreDNS on
-**port 53** (set `port: 53` in `.devdns/records.yaml`, `devdns generate`, then
-start with `sudo`, or use Docker). Then set your DNS server to `127.0.0.1`
-(System Settings → Network → … → DNS on macOS, or your resolver config on Linux).
+With the default port 53, point all DNS at devdns and let it forward public
+queries. Start devdns with `sudo` (or Docker), then set your DNS server to
+`127.0.0.1` (System Settings → Network → … → DNS on macOS, or your resolver
+config on Linux).
 
 ### Linux (systemd-resolved, per-domain)
 
@@ -318,12 +323,13 @@ resolvectl status
 
 Binding to port **53** requires elevated privileges (it is below 1024):
 
-- **Port 1053 (default here):** no `sudo`. Reach it with `dig @127.0.0.1 -p 1053 …`
-  or route a domain to it via `/etc/resolver` (macOS) / systemd-resolved (Linux).
-- **Port 53:** set `port: 53` in `.devdns/records.yaml`, `devdns generate`, then
-  `sudo ./bin/devdns start` (or run it under Docker, which maps the port for
-  you). `devdns start` detects a permission failure and reminds you of these
-  options.
+- **Port 53 (default):** the standard DNS port, so `devdns start` needs `sudo`
+  (or Docker, which maps it for you). Reach it with `dig @127.0.0.1 …` and use it
+  as a whole-system resolver. `devdns start` refuses up front when you are not
+  root and tells you how to proceed.
+- **Port ≥ 1024 (e.g. 1053):** no `sudo`. Set it with `devdns init --port 1053`
+  (or `port: 1053` then `devdns generate`). Reach it with `dig @127.0.0.1 -p 1053 …`
+  or route a domain to it per-domain (see above).
 
 Set `address: 127.0.0.1` if you want to avoid exposing the resolver on your LAN
 (leave it unset for Docker, which needs to listen on all interfaces).
@@ -351,12 +357,15 @@ read-only. Keep editing records with `devdns` on the host and re-run
 ## Verify
 
 ```bash
-# Local zone (authoritative answer from devdns)
-dig @127.0.0.1 -p 1053 app.example.internal
-nslookup -port=1053 api.example.internal 127.0.0.1
+# Local zone (authoritative answer from devdns) — default port 53:
+dig @127.0.0.1 app.example.internal
+nslookup api.example.internal 127.0.0.1
 
 # Public name (forwarded upstream)
-dig @127.0.0.1 -p 1053 google.com
+dig @127.0.0.1 google.com
+
+# On a high port instead (port 1053), add -p:
+dig @127.0.0.1 -p 1053 app.example.internal
 
 # After OS integration (macOS /etc/resolver or system DNS), no @/port needed:
 ping app.example.internal
@@ -373,12 +382,13 @@ broken `--coredns` / `DEVDNS_COREDNS` path. Fix the path, run
 `devdns install-coredns` (or `make coredns` / `brew install coredns`), or allow
 the download. **Air-gapped:** install CoreDNS manually and set `DEVDNS_COREDNS`.
 
-**`permission denied` / port 53** — you tried to bind port 53 without privileges.
-Use port 1053 (the default) or run with `sudo` / Docker. See
+**`permission denied` / port 53** — port 53 needs root. `devdns start` checks up
+front and tells you to re-run with `sudo` (or use Docker). To avoid sudo
+entirely, switch to a high port: `devdns init --port 1053`. See
 [Ports and permissions](#ports-and-permissions-53-vs-1053).
 
 **`address already in use`** — something already listens on the port. Find it
-with `sudo lsof -nP -iUDP:1053` (or `:53`), then stop it or change `port:`.
+with `sudo lsof -nP -iUDP:53` (or `:1053`), then stop it or change `port:`.
 
 **Which store am I editing?** — run `devdns where`. A stray `~/.devdns` change
 usually means you were outside any project; `cd` into the project (it needs a

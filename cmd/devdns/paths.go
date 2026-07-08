@@ -8,10 +8,11 @@ import (
 )
 
 // Defaults used when scaffolding a new store (via `devdns init` or the global
-// auto-init on first run). Port 1053 needs no elevated privileges.
+// auto-init on first run). Port 53 is the standard DNS port, so `devdns start`
+// requires root (sudo); pick a port >= 1024 (e.g. 1053) to run without it.
 const (
 	defaultInitZone = "example.internal"
-	defaultInitPort = 1053
+	defaultInitPort = 53
 )
 
 // storeKind describes how the active store was chosen.
@@ -134,8 +135,8 @@ zone: %s
 # Default TTL (seconds) for records that do not set their own.
 ttl: 60
 
-# Listen port. 1053 needs no elevated privileges, which is convenient for a
-# quick start; use 53 for a system-wide resolver (requires sudo). See the README.
+# Listen port. 53 is the standard DNS port, so starting devdns requires root
+# (sudo). Pick a port >= 1024 (e.g. 1053) to run without sudo. See the README.
 port: %d
 
 # Optional: bind to a single address (e.g. 127.0.0.1) to avoid exposing the

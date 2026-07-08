@@ -70,11 +70,15 @@ brews:
     test: |
       assert_match "devdns", shell_output("#{bin}/devdns version")
     caveats: |
-      devdns serves your local zone on port 1053 by default (no sudo needed).
-      Route a domain to it, e.g. on macOS:
+      devdns serves your local zone on port 53 by default, so `devdns start`
+      needs root:
+
+        devdns init && devdns add app 127.0.0.1 && sudo devdns start
+
+      Prefer no sudo? Use a high port: `devdns init --port 1053`, then route the
+      zone to it, e.g. on macOS:
 
         sudo mkdir -p /etc/resolver
         printf 'nameserver 127.0.0.1\nport 1053\n' | sudo tee /etc/resolver/example.internal
 
-      Then: devdns init && devdns add app 127.0.0.1 && devdns start
       Docs: https://github.com/pakasa-io/dev-dns#point-your-os-at-devdns

@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"text/tabwriter"
@@ -279,7 +280,11 @@ func cmdInit(args []string) error {
 		return err
 	}
 	fmt.Printf("Initialized devdns store at %s (zone %s, port %d)\n", target, cfg.Zone, cfg.ResolvedPort())
-	fmt.Println("Next: `devdns add <name> <value>`, then `devdns start`.")
+	start := "devdns start"
+	if cfg.ResolvedPort() < 1024 {
+		start = "sudo devdns start"
+	}
+	fmt.Printf("Next: `devdns add <name> <value>`, then `%s`.\n", start)
 	return nil
 }
 
@@ -498,6 +503,20 @@ func cmdGenerate(args []string) error {
 	return nil
 }
 
+// ensurePrivileges fails fast when binding the given port needs elevated
+// privileges the current process lacks, before any CoreDNS download or start.
+// Ports below 1024 -- including the standard DNS port 53 -- require root on
+// Unix; the check is skipped on Windows, which has no euid or sudo.
+func ensurePrivileges(port int, recordsPath string) error {
+	if port >= 1024 || runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		return nil
+	}
+	return fmt.Errorf("binding port %d requires root; re-run with sudo:\n\n"+
+		"    sudo devdns start\n\n"+
+		"or set a port >= 1024 (e.g. `port: 1053`) in %s to run without sudo",
+		port, recordsPath)
+}
+
 func cmdStart(args []string) error {
 	fs := newFlagSet("start", "usage: devdns start [--dir PATH] [--coredns PATH] [--no-download]")
 	dir := addStoreFlag(fs)
@@ -510,6 +529,9 @@ func cmdStart(args []string) error {
 	if err != nil {
 		return err
 	}
+	if err := ensurePrivileges(cfg.ResolvedPort(), a.recordsPath); err != nil {
+		return err
+	}
 	if err := a.regenerate(cfg); err != nil {
 		return err
 	}
@@ -519,11 +541,6 @@ func cmdStart(args []string) error {
 	}
 	msg, err := a.manager(bin).Start()
 	if err != nil {
-		if cfg.ResolvedPort() < 1024 {
-			return fmt.Errorf("%w\n\nport %d requires elevated privileges: either run with sudo, "+
-				"or set `port: 1053` in %s and run `devdns start` again",
-				err, cfg.ResolvedPort(), a.recordsPath)
-		}
 		return err
 	}
 	fmt.Println(msg)
@@ -560,6 +577,9 @@ func cmdRestart(args []string) error {
 	}
 	a, cfg, err := openConfig(*dir)
 	if err != nil {
+		return err
+	}
+	if err := ensurePrivileges(cfg.ResolvedPort(), a.recordsPath); err != nil {
 		return err
 	}
 	if err := a.regenerate(cfg); err != nil {
@@ -759,7 +779,7 @@ Examples:
   devdns add api.example.internal 127.0.0.1
   devdns add www app --type CNAME
   devdns remove api
-  devdns generate && devdns start
-  dig @127.0.0.1 -p 1053 app.example.internal
+  devdns generate && sudo devdns start
+  dig @127.0.0.1 app.example.internal
 `)
 }
