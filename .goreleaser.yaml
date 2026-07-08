@@ -1,0 +1,80 @@
+# GoReleaser configuration -- https://goreleaser.com
+#
+# On every pushed tag (see .github/workflows/release.yml) this cross-compiles
+# devdns, publishes a GitHub release with archives + checksums, and updates the
+# Homebrew formula in the tap repo.
+#
+# NOTE: replace `pakasa-io` below with your GitHub owner, and create the tap repo
+# `<owner>/homebrew-tap` plus a HOMEBREW_TAP_TOKEN secret (a PAT with write
+# access to that repo). Try it locally with `make snapshot` (no publish).
+version: 2
+
+project_name: devdns
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: devdns
+    main: ./cmd/devdns
+    binary: devdns
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: devdns
+    formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+      - LICENSE
+
+checksum:
+  name_template: checksums.txt
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+
+brews:
+  - name: devdns
+    repository:
+      owner: pakasa-io
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    directory: Formula
+    homepage: "https://github.com/pakasa-io/dev-dns"
+    description: "Local development DNS resolver backed by CoreDNS"
+    license: "MIT"
+    # devdns can auto-download CoreDNS, but depending on the formula makes it
+    # brew-native (found on $PATH, no runtime download).
+    dependencies:
+      - name: coredns
+    test: |
+      assert_match "devdns", shell_output("#{bin}/devdns version")
+    caveats: |
+      devdns serves your local zone on port 1053 by default (no sudo needed).
+      Route a domain to it, e.g. on macOS:
+
+        sudo mkdir -p /etc/resolver
+        printf 'nameserver 127.0.0.1\nport 1053\n' | sudo tee /etc/resolver/example.internal
+
+      Then: devdns init && devdns add app 127.0.0.1 && devdns start
+      Docs: https://github.com/pakasa-io/dev-dns#point-your-os-at-devdns

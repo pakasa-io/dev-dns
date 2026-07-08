@@ -2,19 +2,21 @@
 BINARY  := devdns
 BIN_DIR := bin
 GO      ?= go
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+LDFLAGS := -s -w -X main.version=$(VERSION)
 
 .DEFAULT_GOAL := help
 
-.PHONY: help build install test vet fmt tidy coredns generate start stop restart reload status clean
+.PHONY: help build install test vet fmt tidy coredns generate start stop restart reload status snapshot clean
 
 help: ## Show this help
 	@awk 'BEGIN{FS=":.*## "} /^[a-zA-Z_-]+:.*## /{printf "  \033[36m%-10s\033[0m %s\n",$$1,$$2}' $(MAKEFILE_LIST)
 
 build: ## Build the devdns CLI into ./bin
-	$(GO) build -o $(BIN_DIR)/$(BINARY) ./cmd/devdns
+	$(GO) build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(BINARY) ./cmd/devdns
 
 install: ## Install devdns with `go install`
-	$(GO) install ./cmd/devdns
+	$(GO) install -ldflags "$(LDFLAGS)" ./cmd/devdns
 
 test: ## Run the test suite
 	$(GO) test ./...
@@ -49,5 +51,8 @@ reload: build ## Regenerate config and let a running CoreDNS reload
 status: build ## Show CoreDNS status
 	$(BIN_DIR)/$(BINARY) status
 
+snapshot: ## Build a local GoReleaser snapshot into ./dist (no publish)
+	goreleaser release --snapshot --clean
+
 clean: ## Remove build artifacts and runtime state (keeps the committed .devdns config)
-	rm -rf $(BIN_DIR) .devdns/bin .devdns/coredns.pid .devdns/coredns.log
+	rm -rf $(BIN_DIR) dist .devdns/bin .devdns/coredns.pid .devdns/coredns.log

@@ -25,7 +25,10 @@ import (
 	"dev-dns/internal/validation"
 )
 
-const version = "0.1.0"
+// version is set at build time via -ldflags "-X main.version=...".
+// It defaults to "dev" for plain `go build`; `make build` injects git describe,
+// and GoReleaser injects the release tag.
+var version = "dev"
 
 func main() {
 	err := run(os.Args[1:])

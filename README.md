@@ -49,6 +49,16 @@ Windows.
 
 ## Install
 
+### Homebrew (macOS/Linux)
+
+```bash
+brew install pakasa-io/tap/devdns
+```
+
+This also installs `coredns` as a dependency. Upgrade with `brew upgrade devdns`.
+
+### From source
+
 ```bash
 # 1. Build the CLI (produces ./bin/devdns)
 make build
@@ -425,3 +435,25 @@ make build     # ./bin/devdns
 Tests cover store resolution (project walk-up vs global fallback), hostname/IP/
 type validation, record parsing and mutation (duplicates, CNAME rules,
 add/update/remove), and zone/Corefile generation.
+
+### Releasing
+
+Releases are cut by [GoReleaser](https://goreleaser.com) from a pushed tag
+(`.goreleaser.yaml` + `.github/workflows/release.yml`): it cross-compiles
+darwin/linux (amd64/arm64), publishes a GitHub release, and updates the Homebrew
+formula in the tap.
+
+One-time setup:
+
+1. Create a public tap repo `<owner>/homebrew-tap`.
+2. Add a repository secret `HOMEBREW_TAP_TOKEN` — a PAT with write access to it.
+3. Set `owner` in `.goreleaser.yaml` (`brews.repository`) to your GitHub owner.
+
+Each release:
+
+```bash
+make snapshot                 # optional: dry-run the build into ./dist (no publish)
+git tag v0.1.0 && git push origin v0.1.0
+```
+
+The workflow does the rest; users then get it via `brew install <owner>/tap/devdns`.
