@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	"local-dns/internal/records"
+	"dev-dns/internal/records"
 )
 
 // Zone renders an RFC 1035 master zone file for cfg using the given SOA serial.

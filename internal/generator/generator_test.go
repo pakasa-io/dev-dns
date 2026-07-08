@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"local-dns/internal/records"
+	"dev-dns/internal/records"
 )
 
 func sampleConfig() *records.Config {

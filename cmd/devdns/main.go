@@ -16,10 +16,10 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"local-dns/internal/coredns"
-	"local-dns/internal/generator"
-	"local-dns/internal/records"
-	"local-dns/internal/validation"
+	"dev-dns/internal/coredns"
+	"dev-dns/internal/generator"
+	"dev-dns/internal/records"
+	"dev-dns/internal/validation"
 )
 
 const version = "0.1.0"

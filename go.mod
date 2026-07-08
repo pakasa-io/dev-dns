@@ -1,4 +1,4 @@
-module local-dns
+module dev-dns
 
 go 1.23
 

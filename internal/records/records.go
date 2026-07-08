@@ -11,7 +11,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"local-dns/internal/validation"
+	"dev-dns/internal/validation"
 )
 
 // Defaults applied at generation time when the corresponding field is unset.
