@@ -9,9 +9,10 @@ zone: example.internal
 # Default TTL (seconds) for records that do not set their own.
 ttl: 60
 
-# Listen port. 53 is the standard DNS port, so starting devdns requires root
-# (sudo). Pick a port >= 1024 (e.g. 1053) to run without sudo. See the README.
-port: 53
+# Listen port. 1053 needs no privileges (recommended): devdns runs as your user
+# and "devdns resolver install" routes the zone to it. Use 53 for a whole-system
+# resolver, which requires sudo to run. See the README.
+port: 1053
 
 # Optional: bind to a single address (e.g. 127.0.0.1) to avoid exposing the
 # resolver on your LAN. Omit to listen on all interfaces (required for Docker).

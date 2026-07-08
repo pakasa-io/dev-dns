@@ -73,6 +73,8 @@ func run(args []string) error {
 		return cmdReload(rest)
 	case "status":
 		return cmdStatus(rest)
+	case "resolver":
+		return cmdResolver(rest)
 	case "install-coredns", "install":
 		return cmdInstall(rest)
 	case "version", "-v", "--version":
@@ -237,12 +239,13 @@ func logStderr(s string) { fmt.Fprintln(os.Stderr, s) }
 // ---- store commands ----
 
 func cmdInit(args []string) error {
-	fs := newFlagSet("init", "usage: devdns init [--global] [--dir PATH] [--zone Z] [--port N] [--force]")
+	fs := newFlagSet("init", "usage: devdns init [--system] [--global] [--dir PATH] [--zone Z] [--port N] [--force]")
 	global := fs.Bool("global", false, "initialize the global ~/.devdns store instead of a project ./.devdns")
 	dir := fs.String("dir", "", "explicit store directory to create (overrides --global and the default ./.devdns)")
 	zone := fs.String("zone", defaultInitZone, "the authoritative local zone")
 	port := fs.Int("port", defaultInitPort, "listen port")
 	force := fs.Bool("force", false, "overwrite an existing store")
+	system := fs.Bool("system", false, "also install the OS resolver route so the zone resolves system-wide (elevates just that step)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -284,7 +287,16 @@ func cmdInit(args []string) error {
 	if cfg.ResolvedPort() < 1024 {
 		start = "sudo devdns start"
 	}
-	fmt.Printf("Next: `devdns add <name> <value>`, then `%s`.\n", start)
+	if *system {
+		fmt.Println()
+		if err := cmdResolverRun("install", []string{"--dir", target}); err != nil {
+			logStderr("store is ready, but routing did not finish; run the steps above or `devdns resolver install`.")
+			return nil
+		}
+		fmt.Printf("\nThen: `devdns add <name>` and `%s`.\n", start)
+		return nil
+	}
+	fmt.Printf("Next: `devdns add <name>`, `%s`, then `devdns resolver install` to route %s system-wide.\n", start, cfg.Zone)
 	return nil
 }
 
@@ -523,6 +535,40 @@ func ensurePrivileges(port int, recordsPath string) error {
 		port, recordsPath)
 }
 
+// sudoUserIDs returns the invoking user's uid/gid when devdns is running as root
+// under sudo (SUDO_UID/SUDO_GID set); ok is false otherwise.
+func sudoUserIDs() (uid, gid int, ok bool) {
+	if os.Geteuid() != 0 {
+		return 0, 0, false
+	}
+	su, sg := os.Getenv("SUDO_UID"), os.Getenv("SUDO_GID")
+	if su == "" || sg == "" {
+		return 0, 0, false
+	}
+	u, err1 := strconv.Atoi(su)
+	g, err2 := strconv.Atoi(sg)
+	if err1 != nil || err2 != nil {
+		return 0, 0, false
+	}
+	return u, g, true
+}
+
+// reownIfSudo hands the whole store back to the invoking user when running under
+// sudo (the Option B / port < 1024 path), so root-run generation and CoreDNS
+// state never leave root-owned files in a user's project.
+func (a *app) reownIfSudo() {
+	uid, gid, ok := sudoUserIDs()
+	if !ok {
+		return
+	}
+	_ = filepath.Walk(a.dir, func(path string, _ os.FileInfo, err error) error {
+		if err == nil {
+			_ = os.Chown(path, uid, gid)
+		}
+		return nil
+	})
+}
+
 func cmdStart(args []string) error {
 	fs := newFlagSet("start", "usage: devdns start [--dir PATH] [--coredns PATH] [--no-download]")
 	dir := addStoreFlag(fs)
@@ -552,6 +598,7 @@ func cmdStart(args []string) error {
 	fmt.Println(msg)
 	fmt.Printf("Serving zone %s on %s:%d; forwarding everything else to %s\n",
 		cfg.Zone, listenAddr(cfg), cfg.ResolvedPort(), strings.Join(cfg.ResolvedUpstreams(), ", "))
+	a.reownIfSudo()
 	return nil
 }
 
@@ -599,6 +646,7 @@ func cmdRestart(args []string) error {
 	if err != nil {
 		return err
 	}
+	a.reownIfSudo()
 	fmt.Println(msg)
 	return nil
 }
@@ -753,7 +801,7 @@ devdns stores everything for a zone in a store directory: a project-local
 over the global ~/.devdns, which is created automatically on first use.
 
 Store commands:
-  init                    Create a store: ./.devdns here, or ~/.devdns with --global
+  init [--system]         Create a store (./.devdns, or ~/.devdns with --global); --system also routes the zone
   where                   Print the active store directory and how it was chosen
 
 Record commands:
@@ -770,6 +818,7 @@ Server commands:
   restart                 Restart CoreDNS
   reload                  Regenerate config (a running CoreDNS reloads itself)
   status                  Show CoreDNS status and configuration
+  resolver install        Route the zone to devdns system-wide (also: uninstall, status)
   install-coredns         Download CoreDNS into ~/.devdns/bin (auto-runs at start)
 
 Other:

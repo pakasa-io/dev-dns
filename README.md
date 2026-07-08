@@ -93,31 +93,36 @@ with `DEVDNS_COREDNS_VERSION`.
 ## Quick start
 
 This repository ships a ready-to-run project store in `./.devdns/` (zone
-`example.internal`, port **53**), so from the repo root:
+`example.internal`, port **1053** — no `sudo` to run), so from the repo root:
 
 ```bash
 make build
 
-sudo ./bin/devdns start    # port 53 needs root; walks up to ./.devdns, downloads CoreDNS if missing
-sudo ./bin/devdns status
+./bin/devdns start         # runs as you (port 1053); downloads CoreDNS if missing
+./bin/devdns status
 
-# Local zone resolves:
-dig @127.0.0.1 app.example.internal +short      # -> 127.0.0.1
+# Local zone resolves (high port, so pass -p to dig):
+dig @127.0.0.1 -p 1053 app.example.internal +short   # -> 127.0.0.1
 # Public DNS is forwarded:
-dig @127.0.0.1 example.com +short
+dig @127.0.0.1 -p 1053 example.com +short
 
-sudo ./bin/devdns stop
+./bin/devdns stop
 ```
 
-For a **new** project of your own, scaffold a store first:
+For a **new** project of your own, one command scaffolds the store **and** routes
+the zone into your OS so apps resolve it — the store is created as you, and only
+the route step uses `sudo`:
 
 ```bash
 cd ~/my-project
-devdns init --zone my-project.internal   # creates ./.devdns with a starter records.yaml (port 53)
-devdns add app                           # -> 127.0.0.1 (default value)
-sudo devdns start                        # port 53 needs root; or `devdns init --port 1053` for no sudo
-dig @127.0.0.1 app.my-project.internal +short
+devdns init --system --zone my-project.internal   # store as you; routes the zone (sudo only for that)
+devdns add app                                     # app.my-project.internal -> 127.0.0.1
+devdns start                                       # no sudo (port 1053)
+ping app.my-project.internal                       # resolves system-wide
 ```
+
+Drop `--system` to create the store only; run `devdns resolver install` later to
+route it.
 
 To make your whole machine use it, see
 [Point your OS at devdns](#point-your-os-at-devdns).
@@ -189,7 +194,7 @@ restart. Each generate bumps the zone's SOA serial so the change is detected.
 ```yaml
 zone: example.internal      # required: the authoritative local zone
 ttl: 60                     # optional: default record TTL (default 60)
-port: 53                    # optional: listen port; 53 needs sudo, >=1024 (e.g. 1053) doesn't
+port: 1053                  # optional: listen port; 1053 (default) needs no sudo, 53 does
 # address: 127.0.0.1        # optional: bind one address; omit = all interfaces
 upstreams:                  # optional: forwarders (default: Cloudflare + Google)
   - 1.1.1.1
@@ -233,7 +238,7 @@ nearest `./.devdns`, else `~/.devdns`).
 
 | Command | Description |
 | --- | --- |
-| `init [--global] [--zone Z] [--port N] [--force]` | Create a store (`./.devdns` here, or `~/.devdns` with `--global`) |
+| `init [--system] [--global] [--zone Z] [--port N]` | Create a store (`./.devdns`, or `~/.devdns` with `--global`); `--system` also routes the zone into your OS |
 | `where` | Print the active store directory and how it was chosen |
 | `list [--json]` | List records |
 | `add <name> [value] [--type T] [--ttl N]` | Add a record; `value` defaults to `127.0.0.1` (type inferred) |
@@ -246,6 +251,7 @@ nearest `./.devdns`, else `~/.devdns`).
 | `restart [--coredns PATH] [--no-download]` | Restart CoreDNS (downloads it if missing) |
 | `reload` | Regenerate config; a running CoreDNS reloads itself |
 | `status` | Show CoreDNS status and configuration |
+| `resolver install` | Route the zone into your OS so it resolves system-wide (also `uninstall`, `status`); `sudo` only for the write |
 | `install-coredns [--coredns-version V]` | Download CoreDNS into `~/.devdns/bin` (auto-runs at start) |
 | `version` | Print the version |
 
@@ -278,66 +284,41 @@ files; if CoreDNS is running it applies the change within a few seconds.
 
 ## Point your OS at devdns
 
-Two ways, depending on your port. **Whole-system** works out of the box with the
-default port 53 (devdns runs under `sudo`). **Per-domain** routes only your zone
-and needs no `sudo`, but requires a high port (e.g. 1053).
-
-### Per-domain, no sudo (port 1053)
-
-Route only your local zone to devdns on a high port, leaving system DNS
-untouched. First set the store to port 1053 (`devdns init --port 1053`, or
-`port: 1053` then `devdns generate`). macOS reads `/etc/resolver/<domain>` files,
-which support a custom port:
+Serving the zone in CoreDNS isn't enough — your OS only sends a domain to devdns
+once you **route** it there (otherwise `getaddrinfo`/Node/`ping` get NXDOMAIN).
+`devdns resolver install` does this for you, OS-aware, elevating only the one
+step that needs root:
 
 ```bash
-sudo mkdir -p /etc/resolver
-sudo tee /etc/resolver/example.internal >/dev/null <<'EOF'
-nameserver 127.0.0.1
-port 1053
-EOF
-
-# verify (macOS resolver, not dig — dig ignores /etc/resolver)
-scutil --dns | grep -A3 example.internal
-ping app.example.internal
+devdns resolver install       # write the per-domain route (sudo just for this step)
+devdns resolver status        # is the zone routed?
+devdns resolver uninstall     # remove it
 ```
 
-Remove it with `sudo rm /etc/resolver/example.internal`.
+- **macOS** → `/etc/resolver/<zone>`
+- **Linux (systemd-resolved)** → `/etc/systemd/resolved.conf.d/devdns-<zone>.conf`
+- **other** (Windows, non-systemd Linux) → it prints the exact manual steps.
 
-### Whole-system resolver (default, port 53)
+Add `--print` to see the commands without running `sudo`. Once installed,
+`ping`/`curl`/your app resolve the zone system-wide. Note `dig @127.0.0.1` still
+needs `-p <port>` — `dig` talks to CoreDNS directly and ignores the OS route.
 
-With the default port 53, point all DNS at devdns and let it forward public
-queries. Start devdns with `sudo` (or Docker), then set your DNS server to
-`127.0.0.1` (System Settings → Network → … → DNS on macOS, or your resolver
-config on Linux).
+### Whole-system resolver (port 53)
 
-### Linux (systemd-resolved, per-domain)
-
-```ini
-# /etc/systemd/resolved.conf.d/example.internal.conf
-[Resolve]
-DNS=127.0.0.1:1053
-Domains=~example.internal
-```
-
-```bash
-sudo systemctl restart systemd-resolved
-resolvectl status
-```
-
-(For a whole-system resolver, set `DNS=127.0.0.1` on port 53 and drop the
-`Domains=` line.)
+To make devdns your machine's *only* resolver instead of routing one zone, set
+`port: 53` (needs `sudo` to run, or Docker) and point all DNS at `127.0.0.1`
+(System Settings → Network → … → DNS on macOS; your stub-resolver config on Linux).
 
 ## Ports and permissions (53 vs 1053)
 
-Binding to port **53** requires elevated privileges (it is below 1024):
+Ports below 1024 (including 53) require root to bind:
 
-- **Port 53 (default):** the standard DNS port, so `devdns start` needs `sudo`
-  (or Docker, which maps it for you). Reach it with `dig @127.0.0.1 …` and use it
-  as a whole-system resolver. `devdns start` refuses up front when you are not
-  root and tells you how to proceed.
-- **Port ≥ 1024 (e.g. 1053):** no `sudo`. Set it with `devdns init --port 1053`
-  (or `port: 1053` then `devdns generate`). Reach it with `dig @127.0.0.1 -p 1053 …`
-  or route a domain to it per-domain (see above).
+- **Port 1053 (default):** no `sudo` — devdns runs as you and leaves no root-owned
+  files. Route the zone with `devdns resolver install`; reach it directly with
+  `dig @127.0.0.1 -p 1053 …`. The recommended dev setup.
+- **Port 53:** the standard DNS port, so `devdns start` needs `sudo` (or Docker).
+  Use it for a whole-system resolver. `devdns start` refuses up front when you are
+  not root, and hands the store back to your user afterward (no root-owned files).
 
 Set `address: 127.0.0.1` if you want to avoid exposing the resolver on your LAN
 (leave it unset for Docker, which needs to listen on all interfaces).
@@ -403,9 +384,10 @@ usually means you were outside any project; `cd` into the project (it needs a
 `./.devdns/`, created by `devdns init`) or pass `--dir`.
 
 **`dig` works but `ping`/the browser doesn't** — `dig @127.0.0.1` talks to
-CoreDNS directly; the OS only uses it after you
-[point your OS at devdns](#point-your-os-at-devdns). Note `dig` (without `@`)
-ignores macOS `/etc/resolver` files — use `ping`/`scutil --dns` to test those.
+CoreDNS directly; the OS only uses it once the zone is routed. Run
+`devdns resolver install` (see [Point your OS at devdns](#point-your-os-at-devdns)),
+then `devdns resolver status` to confirm. Note plain `dig` ignores the OS route —
+use `ping`/`scutil --dns` to test that path.
 
 **Changes not taking effect** — CoreDNS reloads within ~5s; check
 `devdns status` and the log in the store (`.devdns/coredns.log`, or
