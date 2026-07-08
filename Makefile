@@ -28,7 +28,7 @@ fmt: ## Format the code
 tidy: ## Tidy go.mod / go.sum
 	$(GO) mod tidy
 
-coredns: build ## Download the CoreDNS binary into ./bin (OS-agnostic, via devdns)
+coredns: build ## Download the CoreDNS binary into ~/.devdns/bin (OS-agnostic, via devdns)
 	$(BIN_DIR)/$(BINARY) install-coredns
 
 generate: build ## Regenerate the Corefile and zone files from records.yaml
@@ -49,5 +49,5 @@ reload: build ## Regenerate config and let a running CoreDNS reload
 status: build ## Show CoreDNS status
 	$(BIN_DIR)/$(BINARY) status
 
-clean: ## Remove build artifacts and runtime state
-	rm -rf $(BIN_DIR) .devdns
+clean: ## Remove build artifacts and runtime state (keeps the committed .devdns config)
+	rm -rf $(BIN_DIR) .devdns/bin .devdns/coredns.pid .devdns/coredns.log

@@ -1,16 +1,18 @@
 #!/usr/bin/env bash
-# Download a CoreDNS release binary into a local bin/ directory.
+# Download a CoreDNS release binary into the shared devdns bin/ directory.
 #
 # Usage:
-#   scripts/install-coredns.sh [BIN_DIR]      # BIN_DIR defaults to ./bin
+#   scripts/install-coredns.sh [BIN_DIR]      # BIN_DIR defaults to ~/.devdns/bin
 #   COREDNS_VERSION=1.11.3 scripts/install-coredns.sh
+#   DEVDNS_HOME=/custom/home scripts/install-coredns.sh
 #
 # CoreDNS is only needed to actually serve DNS (devdns start/stop). Generating
-# and validating config works without it.
+# and validating config works without it. `devdns install-coredns` does the same
+# thing natively (no curl/tar needed).
 set -euo pipefail
 
 VERSION="${COREDNS_VERSION:-1.11.3}"
-BIN_DIR="${1:-bin}"
+BIN_DIR="${1:-${DEVDNS_HOME:-$HOME/.devdns}/bin}"
 
 os="$(uname -s | tr '[:upper:]' '[:lower:]')"
 arch="$(uname -m)"

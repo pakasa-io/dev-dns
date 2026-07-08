@@ -36,11 +36,11 @@ func DefaultDest(workDir string) string {
 }
 
 // EnsureBinary returns a usable coredns path. It first looks for an existing
-// binary via FindBinary; if none is found and allowDownload is true, it
-// downloads one into <workDir>/bin. A binary pinned explicitly (via the
-// argument or $DEVDNS_COREDNS) is never overridden by a download.
-func EnsureBinary(explicit, workDir string, allowDownload bool, log func(string)) (string, error) {
-	if p, err := FindBinary(explicit, workDir); err == nil {
+// binary via FindBinary across searchDirs; if none is found and allowDownload is
+// true, it downloads one into downloadDir/bin. A binary pinned explicitly (via
+// the argument or $DEVDNS_COREDNS) is never overridden by a download.
+func EnsureBinary(explicit string, searchDirs []string, downloadDir string, allowDownload bool, log func(string)) (string, error) {
+	if p, err := FindBinary(explicit, searchDirs...); err == nil {
 		return p, nil
 	} else if !allowDownload || explicit != "" || os.Getenv("DEVDNS_COREDNS") != "" {
 		return "", err
@@ -48,7 +48,7 @@ func EnsureBinary(explicit, workDir string, allowDownload bool, log func(string)
 	if log != nil {
 		log("CoreDNS binary not found.")
 	}
-	return Install(InstallOptions{Dest: DefaultDest(workDir), Log: log})
+	return Install(InstallOptions{Dest: DefaultDest(downloadDir), Log: log})
 }
 
 // Install downloads the CoreDNS release for the current OS/architecture and

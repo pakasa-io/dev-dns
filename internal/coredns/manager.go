@@ -31,8 +31,9 @@ func (m *Manager) pidFile() string { return filepath.Join(m.StateDir, "coredns.p
 func (m *Manager) logFile() string { return filepath.Join(m.StateDir, "coredns.log") }
 
 // FindBinary locates the coredns executable. Search order: the explicit path,
-// $DEVDNS_COREDNS, <workDir>/bin/coredns, then $PATH.
-func FindBinary(explicit, workDir string) (string, error) {
+// $DEVDNS_COREDNS, <dir>/bin/coredns for each searchDir in turn, then $PATH.
+// Callers typically pass the global home first and the active store second.
+func FindBinary(explicit string, searchDirs ...string) (string, error) {
 	var candidates []string
 	if explicit != "" {
 		candidates = append(candidates, explicit)
@@ -40,7 +41,11 @@ func FindBinary(explicit, workDir string) (string, error) {
 	if env := os.Getenv("DEVDNS_COREDNS"); env != "" {
 		candidates = append(candidates, env)
 	}
-	candidates = append(candidates, filepath.Join(workDir, "bin", "coredns"))
+	for _, d := range searchDirs {
+		if d != "" {
+			candidates = append(candidates, filepath.Join(d, "bin", "coredns"))
+		}
+	}
 	for _, c := range candidates {
 		if fi, err := os.Stat(c); err == nil && !fi.IsDir() {
 			return c, nil

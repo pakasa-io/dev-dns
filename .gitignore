@@ -464,7 +464,13 @@ Temporary Items
 *.icloud
 
 ### devdns (project) ###
-# The built devdns CLI and the downloaded CoreDNS binary
+# The built devdns CLI
 /bin/
-# CoreDNS runtime state: pidfile and logs
-/.devdns/
+# devdns store: only records.yaml (the source of truth) is committed. The
+# generated Corefile/zones, runtime state, and the shared CoreDNS binary are all
+# local -- recreated by `devdns generate` or downloaded on demand.
+/.devdns/Corefile
+/.devdns/zones/
+/.devdns/coredns.pid
+/.devdns/coredns.log
+/.devdns/bin/
