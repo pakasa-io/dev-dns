@@ -114,7 +114,7 @@ For a **new** project of your own, scaffold a store first:
 ```bash
 cd ~/my-project
 devdns init --zone my-project.internal   # creates ./.devdns with a starter records.yaml (port 53)
-devdns add app 127.0.0.1
+devdns add app                           # -> 127.0.0.1 (default value)
 sudo devdns start                        # port 53 needs root; or `devdns init --port 1053` for no sudo
 dig @127.0.0.1 app.my-project.internal +short
 ```
@@ -236,7 +236,7 @@ nearest `./.devdns`, else `~/.devdns`).
 | `init [--global] [--zone Z] [--port N] [--force]` | Create a store (`./.devdns` here, or `~/.devdns` with `--global`) |
 | `where` | Print the active store directory and how it was chosen |
 | `list [--json]` | List records |
-| `add <name> <value> [--type T] [--ttl N]` | Add a record (type inferred from value) |
+| `add <name> [value] [--type T] [--ttl N]` | Add a record; `value` defaults to `127.0.0.1` (type inferred) |
 | `update <name> <value> [--type T] [--ttl N]` | Add or replace a record |
 | `remove <name> [--type T]` | Remove records for a name |
 | `validate` | Validate `records.yaml` |
@@ -262,8 +262,8 @@ Examples:
 
 ```bash
 devdns init                              # scaffold ./.devdns for this project
-devdns add app 127.0.0.1                 # A record (inferred)
-devdns add api.example.internal 127.0.0.1
+devdns add app                           # A record -> 127.0.0.1 (default value)
+devdns add api 10.0.0.5                   # explicit value; type A inferred
 devdns add v6 ::1                         # AAAA (inferred)
 devdns add www app --type CNAME          # www.example.internal -> app.example.internal
 devdns add app 127.0.0.1 --ttl 300       # per-record TTL

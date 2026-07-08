@@ -355,7 +355,7 @@ func cmdList(args []string) error {
 }
 
 func cmdAdd(args []string) error {
-	fs := newFlagSet("add", "usage: devdns add <name> <value> [--type A|AAAA|CNAME] [--ttl N] [--dir PATH]")
+	fs := newFlagSet("add", "usage: devdns add <name> [<value>] [--type A|AAAA|CNAME] [--ttl N] [--dir PATH]  (value defaults to 127.0.0.1)")
 	dir := addStoreFlag(fs)
 	typ := fs.String("type", "", "record type; inferred from the value when empty")
 	ttl := fs.Int("ttl", 0, "per-record TTL in seconds (0 = use the zone default)")
@@ -363,15 +363,21 @@ func cmdAdd(args []string) error {
 	if err != nil {
 		return err
 	}
-	if len(pos) != 2 {
+	if len(pos) < 1 || len(pos) > 2 {
 		fs.Usage()
-		return fmt.Errorf("expected <name> and <value>")
+		return fmt.Errorf("expected <name> and an optional <value>")
+	}
+	// The value defaults to loopback -- the overwhelmingly common local-dev
+	// target -- so `devdns add app` creates app -> 127.0.0.1 (an A record).
+	value := "127.0.0.1"
+	if len(pos) == 2 {
+		value = pos[1]
 	}
 	a, cfg, err := openConfig(*dir)
 	if err != nil {
 		return err
 	}
-	rec, err := buildRecord(cfg, pos[0], pos[1], *typ, *ttl)
+	rec, err := buildRecord(cfg, pos[0], value, *typ, *ttl)
 	if err != nil {
 		return err
 	}
@@ -752,7 +758,7 @@ Store commands:
 
 Record commands:
   list                    List records (--json for machine-readable output)
-  add <name> <value>      Add a record; type is inferred from the value
+  add <name> [value]      Add a record (value defaults to 127.0.0.1); type inferred
   update <name> <value>   Add or replace a record
   remove <name>           Remove records for a name (--type to narrow)
   validate                Validate records.yaml
@@ -775,8 +781,8 @@ is overridable with $DEVDNS_HOME.
 
 Examples:
   devdns init --zone example.internal
-  devdns add app 127.0.0.1
-  devdns add api.example.internal 127.0.0.1
+  devdns add app                       # A record -> 127.0.0.1 (default value)
+  devdns add api.example.internal 10.0.0.5
   devdns add www app --type CNAME
   devdns remove api
   devdns generate && sudo devdns start
